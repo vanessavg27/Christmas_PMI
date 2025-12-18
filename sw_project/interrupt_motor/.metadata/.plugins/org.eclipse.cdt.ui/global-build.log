@@ -1,0 +1,16 @@
+Nothing to build in platform 'design_main_wrapper'
+
+17:43:54 **** Incremental Build of configuration Debug for project Interruption_project ****
+make all 
+make --no-print-directory pre-build
+a9-linaro-pre-build-step
+' '
+make --no-print-directory main-build
+make[1]: Nothing to be done for 'main-build'.
+17:43:55 **** Incremental Build of configuration Debug for project Interruption_project_system ****
+make all 
+Generating bif file for the system project
+generate_system_bif.bat 62295 C:/Users/vanes/christmas/sw_project/interrupt_motor/design_main_wrapper/export/design_main_wrapper/design_main_wrapper.xpfm standalone_ps7_cortexa9_0 C:/Users/vanes/christmas/sw_project/interrupt_motor/Interruption_project_system/Debug/system.bif
+sdcard_gen --xpfm C:/Users/vanes/christmas/sw_project/interrupt_motor/design_main_wrapper/export/design_main_wrapper/design_main_wrapper.xpfm --sys_config design_main_wrapper --bif C:/Users/vanes/christmas/sw_project/interrupt_motor/Interruption_project_system/Debug/system.bif --bitstream C:/Users/vanes/christmas/sw_project/interrupt_motor/Interruption_project/_ide/bitstream/design_main_wrapper.bit --elf C:/Users/vanes/christmas/sw_project/interrupt_motor/Interruption_project/Debug/Interruption_project.elf,ps7_cortexa9_0
+creating BOOT.BIN using C:/Users/vanes/christmas/sw_project/interrupt_motor/Interruption_project/_ide/bitstream/design_main_wrapper.bit
+Running C:/Users/vanes/Xilinx/Vitis/2022.2/bin/bootgen  -image C:/Users/vanes/christmas/sw_project/interrupt_motor/Interruption_project_system/Debug/sd_card_temp/boot.bif -w -o i BOOT.BIN

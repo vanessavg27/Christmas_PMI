@@ -1,0 +1,137 @@
+#include "xparameters.h"
+#include "xgpio.h"
+#include "xscugic.h"
+#include "xil_printf.h"
+#include "sleep.h"
+
+// Device IDs (verifica estos valores en xparameters.h)
+#define GPIO_DEVICE_ID      XPAR_AXI_GPIO_0_DEVICE_ID
+#define INTC_DEVICE_ID      XPAR_SCUGIC_SINGLE_DEVICE_ID
+#define GPIO_INTERRUPT_ID   XPAR_FABRIC_AXI_GPIO_0_IP2INTC_IRPT_INTR
+
+// Canales
+#define BUTTON_CHANNEL      1
+#define BUTTON_MASK         0x01
+
+// Instancias de dispositivos
+XGpio Gpio;
+XScuGic Intc;
+
+// Variables globales
+volatile int contador = 0;
+volatile int estado_boton = 0;  // 0: primera presión (ir a 0), 1: segunda presión (ir a 100)
+
+// Prototipo de funciones
+void GpioHandler(void *CallbackRef);
+int SetupInterruptSystem(XScuGic *IntcInstancePtr, XGpio *GpioInstancePtr, u16 GpioIntrId);
+
+int main(void) {
+    int Status;
+
+    xil_printf("\r\n--- Inicio del programa de prueba de interrupcion ---\r\n");
+
+    // Inicializar GPIO
+    Status = XGpio_Initialize(&Gpio, GPIO_DEVICE_ID);
+    if (Status != XST_SUCCESS) {
+        xil_printf("Error: No se pudo inicializar GPIO\r\n");
+        return XST_FAILURE;
+    }
+
+    // Configurar dirección: entrada para el botón
+    XGpio_SetDataDirection(&Gpio, BUTTON_CHANNEL, 0xFFFFFFFF);
+
+    // Configurar sistema de interrupciones
+    Status = SetupInterruptSystem(&Intc, &Gpio, GPIO_INTERRUPT_ID);
+    if (Status != XST_SUCCESS) {
+        xil_printf("Error: No se pudo configurar el sistema de interrupciones\r\n");
+        return XST_FAILURE;
+    }
+
+    xil_printf("Sistema configurado correctamente\r\n");
+    xil_printf("Presiona el boton BTN_0:\r\n");
+    xil_printf("  - Primera vez: Contador va a 0\r\n");
+    xil_printf("  - Segunda vez: Contador va a 100\r\n\r\n");
+
+    // Loop principal: incrementar contador continuamente
+    while(1) {
+        xil_printf("Contador: %d\r\n", contador);
+        contador++;
+        sleep(1);  // Espera 1 segundo
+
+        // Evitar overflow
+        if (contador > 200) {
+            contador = 0;
+        }
+    }
+
+    return 0;
+}
+
+// Manejador de interrupción del GPIO (ISR)
+void GpioHandler(void *CallbackRef) {
+    XGpio *GpioPtr = (XGpio *)CallbackRef;
+    u32 button_value;
+
+    // Leer el estado del botón
+    button_value = XGpio_DiscreteRead(GpioPtr, BUTTON_CHANNEL);
+
+    // Verificar si el botón está presionado (normalmente BTN_0 es activo en alto)
+    if (button_value & BUTTON_MASK) {
+        if (estado_boton == 0) {
+            // Primera presión: contador a 0
+            contador = 0;
+            xil_printf("\r\n*** BOTON PRESIONADO - Contador a 0 ***\r\n\r\n");
+            estado_boton = 1;
+        } else {
+            // Segunda presión: contador a 100
+            contador = 100;
+            xil_printf("\r\n*** BOTON PRESIONADO - Contador a 100 ***\r\n\r\n");
+            estado_boton = 0;
+        }
+    }
+
+    // Limpiar la interrupción
+    XGpio_InterruptClear(GpioPtr, XGPIO_IR_CH1_MASK);
+}
+
+// Configurar el sistema de interrupciones
+int SetupInterruptSystem(XScuGic *IntcInstancePtr, XGpio *GpioInstancePtr, u16 GpioIntrId) {
+    int Status;
+    XScuGic_Config *IntcConfig;
+
+    // Inicializar el controlador de interrupciones (GIC)
+    IntcConfig = XScuGic_LookupConfig(INTC_DEVICE_ID);
+    if (IntcConfig == NULL) {
+        return XST_FAILURE;
+    }
+
+    Status = XScuGic_CfgInitialize(IntcInstancePtr, IntcConfig, IntcConfig->CpuBaseAddress);
+    if (Status != XST_SUCCESS) {
+        return XST_FAILURE;
+    }
+
+    // Configurar el manejador de excepciones
+    Xil_ExceptionRegisterHandler(XIL_EXCEPTION_ID_INT,
+                                  (Xil_ExceptionHandler)XScuGic_InterruptHandler,
+                                  IntcInstancePtr);
+
+    // Conectar el manejador de GPIO a la interrupción
+    Status = XScuGic_Connect(IntcInstancePtr, GpioIntrId,
+                            (Xil_ExceptionHandler)GpioHandler,
+                            (void *)GpioInstancePtr);
+    if (Status != XST_SUCCESS) {
+        return XST_FAILURE;
+    }
+
+    // Habilitar la interrupción del GPIO en el GIC
+    XScuGic_Enable(IntcInstancePtr, GpioIntrId);
+
+    // Habilitar interrupciones del GPIO
+    XGpio_InterruptEnable(GpioInstancePtr, XGPIO_IR_CH1_MASK);
+    XGpio_InterruptGlobalEnable(GpioInstancePtr);
+
+    // Habilitar excepciones
+    Xil_ExceptionEnable();
+
+    return XST_SUCCESS;
+}
